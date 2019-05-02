@@ -1,3 +1,4 @@
 #!/bin/bash
-LD_PRELOAD=./tarsize.so  tar "$@"
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+LD_PRELOAD=$DIR/tarsize.so tar "$@" >&1
 

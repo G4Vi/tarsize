@@ -9,23 +9,26 @@
 #include <string.h>
 
 #define OUT_FD 1
+
 uint64_t total = 0;
 ssize_t (*original_write)(int, const void *, size_t) = NULL;
 int (*original_close)(int) = NULL;
 void print_total(void)
 {
-    printf("%" PRIu64 "\n", total);
+    char buf[256];
+    snprintf(buf, 256, "%" PRIu64 "\n", total);
+    original_write(1, buf, strlen(buf));
 }
 
 int close(int fd)
-{
+{     
     if(! original_close)
     {
         original_close = dlsym(RTLD_NEXT, "close");
     }
     if(fd == OUT_FD)
-    {
-        print_total();
+    {       
+        print_total();        
     }
     return original_close(fd);
 }
