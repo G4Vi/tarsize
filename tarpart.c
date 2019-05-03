@@ -50,7 +50,6 @@ int close(int fd)
 }
 ssize_t read(int fd, void *buf, size_t count)
 {
-    fprintf(stderr, "duckseason\n");
     fprintf(stderr, "filepos %u count %u\n", lseek(fd, 0, SEEK_CUR), count);     
     if(LASTFD != fd)
     {
@@ -78,7 +77,6 @@ ssize_t write(int fd, const void *buf, size_t count)
     {
         return original_write(fd, buf, count);
     }
-    fprintf(stderr, "wabbitseason\n");
     if(((wpos+count) > start) && (toWrite > 0))
     {            
         //We actually care about the data, so let's actually read from there
