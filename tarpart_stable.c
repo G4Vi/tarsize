@@ -37,7 +37,6 @@ static void __attribute__ ((constructor)) lib_init(void)
 }
 
 static int LASTFD = -1;
-static void *LASTBUF;
 static size_t LASTCOUNT;
 static unsigned SEEKAMT = 0;
 
@@ -48,7 +47,7 @@ int close(int fd)
 }
 ssize_t read(int fd, void *buf, size_t count)
 {
-    fprintf(stderr, "actual read %d %p %u %u\n", fd, buf, count, lseek(fd, 0, SEEK_CUR));
+    //fprintf(stderr, "actual read %d %p %u %u\n", fd, buf, count, lseek(fd, 0, SEEK_CUR));
     return original_read(fd, buf, count); 
 }
 
@@ -60,12 +59,6 @@ ssize_t write(int fd, const void *buf, size_t count)
     }
     if(((wpos+count) > start) && (toWrite > 0))
     {            
-        if(0)
-        {
-            //fprintf(stderr, "Critical read failed %d!!\n", errno);
-            exit(EXIT_FAILURE);
-        }
-        //fprintf(stderr, "lastcount %u, filepos after %u\n", LASTCOUNT, lseek(LASTFD, 0, SEEK_CUR)); 
         uint64_t skipbytes = start <= wpos ? 0 : start - wpos; 
         uint64_t actcount = count - skipbytes;
         uint64_t nowwrite = (actcount < toWrite) ? actcount : toWrite;

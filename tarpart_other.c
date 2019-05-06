@@ -19,11 +19,6 @@ uint64_t end = 0;
 
 uint64_t wpos = 0;
 uint64_t toWrite = 0;
-static int LASTFD = -1;
-static unsigned SEEKAMT = 0;
-static bool WriteRelevant = false;
-
-
 static void __attribute__ ((constructor)) lib_init(void)
 {
     const char *sstart = getenv("TS_TAR_START");
@@ -42,34 +37,37 @@ static void __attribute__ ((constructor)) lib_init(void)
     original_close = dlsym(RTLD_NEXT, "close");   
 }
 
-
-
+static int LASTFD = -1;
+static void *LASTBUF;
+static size_t LASTCOUNT;
+static unsigned SEEKAMT = 0;
+static bool LASTREADHANDLED = true;
 
 int close(int fd)
 {
-    if(fd == LASTFD)
-    {
-        SEEKAMT = 0;        
-    }
+    if(fd == LASTFD) return 0;
     return original_close(fd);
 }
 ssize_t read(int fd, void *buf, size_t count)
 {
-    LASTFD = fd;   
-    if(((wpos+10240) > start) && (toWrite > 0)) //if we are set to write bytes from the start index or past it and there are still bytes to write then we probably need this data
-    {            
-        WriteRelevant = true;  
-        if(SEEKAMT > 0)
-        {
-            lseek(fd, SEEKAMT, SEEK_CUR);
-            SEEKAMT = 0;
-        }             
-        return original_read(fd, buf, count);        
-    }
-    else
+    fprintf(stderr, "filepos %u count %u\n", lseek(fd, 0, SEEK_CUR), count);     
+    if(LASTFD != fd)
     {
-        SEEKAMT += count;
+        if(!LASTREADHANDLED)
+        {
+            if(original_read(LASTFD, LASTBUF, LASTCOUNT) < 0)
+            {
+                fprintf(stderr, "Critical read failed %d!!\n", errno);
+                exit(EXIT_FAILURE);
+            }
+        }
+        original_close(LASTFD);
+        SEEKAMT = 0;
     }
+    LASTFD = fd;
+    LASTBUF = buf;
+    LASTCOUNT = count;
+    LASTREADHANDLED = false;
     return count;
 }
 
@@ -79,9 +77,18 @@ ssize_t write(int fd, const void *buf, size_t count)
     {
         return original_write(fd, buf, count);
     }
-    if(WriteRelevant)
-    {
-        WriteRelevant = false;
+    if(((wpos+count) > start) && (toWrite > 0))
+    {            
+        //We actually care about the data, so let's actually read from there
+        lseek(LASTFD, SEEKAMT, SEEK_CUR);
+        SEEKAMT = 0;
+        fprintf(stderr, "actual read %d %p %u %u\n", LASTFD, LASTBUF, LASTCOUNT, lseek(LASTFD, 0, SEEK_CUR));
+        if(original_read(LASTFD, LASTBUF, LASTCOUNT) < 0)
+        {
+            //fprintf(stderr, "Critical read failed %d!!\n", errno);
+            exit(EXIT_FAILURE);
+        }        
+        //fprintf(stderr, "lastcount %u, filepos after %u\n", LASTCOUNT, lseek(LASTFD, 0, SEEK_CUR)); 
         uint64_t skipbytes = start <= wpos ? 0 : start - wpos; 
         uint64_t actcount = count - skipbytes;
         uint64_t nowwrite = (actcount < toWrite) ? actcount : toWrite;
@@ -89,6 +96,12 @@ ssize_t write(int fd, const void *buf, size_t count)
         original_write(fd, actualbuf, nowwrite);
         toWrite -= nowwrite;
     }
+    else
+    {            
+        //we don't care about that data            
+        SEEKAMT += LASTCOUNT;       
+    }
+    LASTREADHANDLED = true;
     wpos += count;        
     return count;   
 }
